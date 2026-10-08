@@ -1,0 +1,95 @@
+{#
+	The zyppy_search form shell - the LEGACY (flat identifier) variant.
+
+	This file is not the module's default template. Since Step 7 the default is
+	the modern fragment template
+	contao/templates/twig/frontend_module/zyppy_search.html.twig, and this one is
+	reached only when an editor has explicitly picked `mod_search_zyppy` in
+	tl_module.customTpl. It is kept, and kept working, because
+	AbstractFragmentController::getTemplateName() PREFERS customTpl over the
+	fragment's declared template, so deleting it would break exactly those rows -
+	and because a site-specific override derived from it should keep rendering.
+
+	IDENTIFIER: the flat legacy `mod_search_zyppy` is kept, and this file must
+	stay OUT of contao/templates/twig/. That directory carries a `.twig-root`
+	marker, which makes ContaoFilesystemLoader register everything beneath it
+	under a PREFIXED `category/name` identifier. A prefixed identifier is exactly
+	what breaks the tl_module.customTpl dropdown, because
+	Controller::getTemplateGroup() throws an InvalidArgumentException for any
+	identifier containing a slash. The marker only affects the directory it sits
+	in and that directory's children, so both placements coexist - see the header
+	of the modern template, and tests/Template/TemplateIdentifierTest.php.
+
+	CHANGED IN STEP 10, in step with the modern shell: `results` is back, and
+	`keyword` with it.
+
+	Step 7 stripped both, because results were assembled in JavaScript and the
+	shell deliberately reflected no request data. Step 10 server-renders the
+	first page again - that is what gives the module a no-JavaScript fallback -
+	so the shell prints the rendered rows and re-fills the search field with the
+	submitted term. What did NOT come back is the old `header` and `pagination`
+	pair: both are rendered INSIDE div.results now by search_zyppy_results, which
+	means contao-zyppy-popup's `popup_clear` clears the header along with the
+	results rather than leaving it orphaned on screen.
+
+	`class` must keep containing `mod_zyppy_search` - public/js/search.js selects
+	div.mod_zyppy_search and zyppy-popup's popup.js relies on it too. In the
+	legacy branch Contao builds that for us out of `mod_` + the module type.
+
+	--------------------------------------------------------------------------
+	ESCAPED vs |raw. Twig autoescapes; every |raw below is deliberate.
+
+	|raw, because core or this bundle builds markup into these:
+	  cssID     a complete ` id="..."` attribute string (Module.php:220)
+	  style     a complete style attribute value
+	  headline  backend authored, may contain markup / insert tags
+	  results   already-rendered, already-escaped result markup
+
+	Escaped, because they are data:
+	  keyword   THE ATTACKER-SUPPLIED ONE. It is whatever was in the query
+	            string, read straight off the Request and handed over raw, so
+	            Twig escapes it exactly once. Do not pre-escape it in PHP: with
+	            $blnDoubleEncode defaulting to false that would leave the value
+	            looking right while Twig double-encoded it, and a search for
+	            `don't` would render as the literal `don&#39;t`.
+	  endpoint, keywordLabel, optionsLabel, placeholder, errorText, search,
+	  matchAll, matchAny, action, minLength, uniqueId
+
+	CAVEAT for a site-specific customTpl: `keyword` is not pre-escaped. A custom
+	.html5 that echoed `$this->keyword` raw would be unsafe - but any custom
+	template for this module must be Twig, which it must be on Contao 6 anyway.
+	--------------------------------------------------------------------------
+#}
+<!-- indexer::stop -->
+<div class="{{ class }} block"{{ cssID|default('')|raw }}{% if style|default('') %} style="{{ style|raw }}"{% endif %}>
+
+	{% if headline|default('') %}
+		<{{ hl }}>{{ headline|raw }}</{{ hl }}>
+	{% endif %}
+
+	<form{% if action|default('') %} action="{{ action }}"{% endif %} method="get">
+		<div class="formbody">
+			<div class="widget widget-text">
+				<label for="ctrl_keywords_{{ uniqueId }}" class="invisible">{{ keywordLabel|default('') }}</label>
+				<input type="search" name="keywords" id="ctrl_keywords_{{ uniqueId }}" class="text" value="{{ keyword|default('') }}" placeholder="{{ placeholder|default('') }}" data-min-length="{{ minLength|default(3) }}" data-error-text="{{ errorText|default('') }}" data-endpoint="{{ endpoint|default('') }}">
+			</div>
+			<div class="widget widget-submit">
+				<button type="submit" id="ctrl_submit_{{ uniqueId }}" class="submit">{{ search|default('') }}</button>
+			</div>
+			{% if advanced|default(false) %}
+				<div class="widget widget-radio">
+					<fieldset class="radio_container">
+						<legend class="invisible">{{ optionsLabel|default('') }}</legend>
+						<span><input type="radio" name="query_type" id="matchAll_{{ uniqueId }}" class="radio" value="and"{% if queryType|default('') == 'and' %} checked="checked"{% endif %}> <label for="matchAll_{{ uniqueId }}">{{ matchAll|default('') }}</label></span>
+						<span><input type="radio" name="query_type" id="matchAny_{{ uniqueId }}" class="radio" value="or"{% if queryType|default('') == 'or' %} checked="checked"{% endif %}> <label for="matchAny_{{ uniqueId }}">{{ matchAny|default('') }}</label></span>
+					</fieldset>
+				</div>
+			{% endif %}
+		</div>
+	</form>
+
+	<div class="results{{ popupClear|default(false) ? ' popup_clear' : '' }}">{{ results|default('')|raw }}</div>
+
+</div>
+<script src="{{ scriptSrc|default('') }}" defer></script>
+<!-- indexer::continue -->

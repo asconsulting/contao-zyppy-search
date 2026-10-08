@@ -1,0 +1,86 @@
+{#
+	The zyppy_search form shell - the MODERN fragment template.
+
+	IDENTIFIER, and why this file's placement is the exact OPPOSITE of the three
+	legacy templates in this same bundle. Read this before moving anything.
+
+	  * ZyppySearchController declares template: 'frontend_module/zyppy_search',
+	    a name containing a slash. AbstractFragmentController::isLegacyTemplate()
+	    is literally `!str_contains($templateName, '/')`, so the slash is what
+	    selects the modern rendering path and the modern context shape (data,
+	    headline.text, element_css_classes, ...) instead of the legacy one.
+	  * For ContaoFilesystemLoader to register a bundle template under a
+	    PREFIXED identifier, the directory has to be a namespace root - which
+	    means an empty `.twig-root` marker file. Ours is at
+	    contao/templates/twig/.twig-root. Without it, TemplateLocator scans
+	    subdirectories at depth < 1 and registers this file as the bare
+	    basename `zyppy_search`, the fragment's declared name never resolves,
+	    and every render 500s.
+	  * The three legacy templates - modules/mod_search_zyppy,
+	    search/search_zyppy and search/search_zyppy_results - must KEEP their
+	    no-marker placement. They are flat identifiers, and two of them are
+	    reached through DCA dropdowns built by Controller::getTemplateGroup(),
+	    which throws for any identifier containing a slash.
+
+	Both are true at once because TemplateLocator::expandSubdirectories() walks
+	the bundle's contao/templates tree, treats any directory carrying the marker
+	as its own namespace root (scanned RECURSIVELY, giving prefixed names) and
+	excludes that directory's children from the plain depth<1 scan the other
+	subdirectories get. tests/Template/TemplateIdentifierTest.php pins both
+	halves against the real core TemplateLocator rather than leaving it as prose.
+
+	--------------------------------------------------------------------------
+	CHANGED IN STEP 10: this shell renders RESULTS again.
+
+	`results` is the first page, server-rendered by ResultRenderer through
+	search_zyppy_results + search_zyppy. That is what gives the module a
+	no-JavaScript fallback - a visitor who submits the form gets results back
+	with no script involved at all - and it is the same string search.js later
+	drops into div.results from the JSON route, so first paint and every live
+	update are identical by construction.
+
+	`mod_zyppy_search` on the wrapper is LOAD BEARING and is written out
+	literally: element_css_classes carries only the editor's own cssID classes,
+	not Contao's `mod_<type>`. public/js/search.js selects
+	div.mod_zyppy_search, and contao-zyppy-popup's popup.js depends on it too.
+
+	ESCAPED vs |raw. Twig autoescapes; the |raw values are `headline` (backend
+	authored, may carry markup or insert tags) and `results` (already-rendered,
+	already-escaped markup). Everything else is data and escapes - including
+	`keyword`, which is attacker-supplied by definition, and `endpoint`, which
+	is generated but still written into an attribute.
+	--------------------------------------------------------------------------
+#}
+<!-- indexer::stop -->
+<div class="mod_zyppy_search block{% if element_css_classes|default('') %} {{ element_css_classes }}{% endif %}"{% if element_html_id|default('') %} id="{{ element_html_id }}"{% endif %}>
+
+	{% if headline.text|default('') %}
+		<{{ headline.tag_name|default('h1') }}>{{ headline.text|raw }}</{{ headline.tag_name|default('h1') }}>
+	{% endif %}
+
+	<form{% if action|default('') %} action="{{ action }}"{% endif %} method="get">
+		<div class="formbody">
+			<div class="widget widget-text">
+				<label for="ctrl_keywords_{{ uniqueId }}" class="invisible">{{ keywordLabel|default('') }}</label>
+				<input type="search" name="keywords" id="ctrl_keywords_{{ uniqueId }}" class="text" value="{{ keyword|default('') }}" placeholder="{{ placeholder|default('') }}" data-min-length="{{ minLength|default(3) }}" data-error-text="{{ errorText|default('') }}" data-endpoint="{{ endpoint }}">
+			</div>
+			<div class="widget widget-submit">
+				<button type="submit" id="ctrl_submit_{{ uniqueId }}" class="submit">{{ search|default('') }}</button>
+			</div>
+			{% if advanced|default(false) %}
+				<div class="widget widget-radio">
+					<fieldset class="radio_container">
+						<legend class="invisible">{{ optionsLabel|default('') }}</legend>
+						<span><input type="radio" name="query_type" id="matchAll_{{ uniqueId }}" class="radio" value="and"{% if queryType|default('') == 'and' %} checked="checked"{% endif %}> <label for="matchAll_{{ uniqueId }}">{{ matchAll|default('') }}</label></span>
+						<span><input type="radio" name="query_type" id="matchAny_{{ uniqueId }}" class="radio" value="or"{% if queryType|default('') == 'or' %} checked="checked"{% endif %}> <label for="matchAny_{{ uniqueId }}">{{ matchAny|default('') }}</label></span>
+					</fieldset>
+				</div>
+			{% endif %}
+		</div>
+	</form>
+
+	<div class="results{{ popupClear|default(false) ? ' popup_clear' : '' }}">{{ results|default('')|raw }}</div>
+
+</div>
+<script src="{{ scriptSrc|default('') }}" defer></script>
+<!-- indexer::continue -->

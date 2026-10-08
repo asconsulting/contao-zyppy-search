@@ -1,0 +1,45 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    Zyppy\Search\:
+        resource: ../src
+        # Value objects and DTOs are constructed, never injected: SearchQuery,
+        # ResultWindow and SearchResults all have private constructors or
+        # required scalars, so autowiring them would fail at compile time.
+        exclude: '../src/{ContaoManager,DependencyInjection,Util,Search/SearchQuery.php,Search/ResultWindow.php,Search/SearchResults.php,Search/SearchResultItem.php,Search/SafeUrl.php}'
+
+    # The two seams that keep ResultEnricher and ZyppySearchRunner testable.
+    Zyppy\Search\Search\ResultImageResolverInterface: '@Zyppy\Search\Search\ContaoImageResolver'
+    Zyppy\Search\Search\NewsLookupInterface: '@Zyppy\Search\Search\ContaoNewsLookup'
+
+    # Wired by service id rather than by autowired class name: contao.image.studio
+    # is the id Contao has always published, whereas the Studio::class autowiring
+    # alias is a newer convenience.
+    Zyppy\Search\Search\ContaoImageResolver:
+        arguments:
+            $objStudio: '@contao.image.studio'
+
+    # The rate limiter Step 3 deferred because there was no route to attach it
+    # to. Built from the component directly rather than through
+    # framework.rate_limiter config: a bundle prepending framework config can
+    # collide with a project's own, and the concrete RateLimiterFactory has had
+    # the same constructor since Symfony 5.2 - RateLimiterFactoryInterface does
+    # not exist on the 6.4 line the Contao 5.3 floor resolves to.
+    zyppy_search.rate_limiter.storage:
+        class: Symfony\Component\RateLimiter\Storage\CacheStorage
+        arguments:
+            - '@cache.app'
+
+    zyppy_search.rate_limiter:
+        class: Symfony\Component\RateLimiter\RateLimiterFactory
+        arguments:
+            - { id: 'zyppy_search', policy: 'sliding_window', limit: 30, interval: '1 minute' }
+            - '@zyppy_search.rate_limiter.storage'
+
+    # Public because config/routes.yaml names the class as the controller.
+    Zyppy\Search\Controller\SearchController:
+        public: true
+        arguments:
+            $objLimiterFactory: '@zyppy_search.rate_limiter'

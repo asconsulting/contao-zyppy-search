@@ -1,0 +1,78 @@
+{#
+	One search result.
+
+	Rendered by Zyppy\Search\Search\ResultRenderer for BOTH paths - the
+	server-rendered first page and every live update fetched from
+	/_zyppy/search/{moduleId} - so this file is the single place a result's
+	markup is decided. That is what makes tl_module.searchTpl mean something:
+	swap this template and both paths change together.
+
+	Flat legacy identifier `search_zyppy`, no `.twig-root` marker anywhere above
+	it - see search_zyppy_results.html.twig and mod_search_zyppy.html.twig for
+	why. It matters most here: `searchTpl` is a dropdown built by
+	Controller::getTemplateGroup('search_') (core tl_module.php:340), which
+	throws for any identifier containing a slash, and existing tl_module rows
+	already have the flat `search_zyppy` saved.
+
+	--------------------------------------------------------------------------
+	ESCAPED vs |raw - the pair that matters in a search result template.
+
+	|raw:
+	  context   ContextBuilder builds it as StringUtil::specialchars(...)
+	            followed by a preg_replace that injects
+	            `<mark class="highlight">$1</mark>` around every matched keyword
+	            variant. So it is ALREADY escaped text with generated markup
+	            layered on top. Escaping it again would show the reader
+	            `&lt;mark class=&quot;highlight&quot;&gt;` instead of a highlight.
+
+	Escaped - all of these are data:
+	  link      the indexed page title. tl_search.title comes from
+	            DomCrawler::text() (DefaultIndexer.php:47), i.e. DECODED plain
+	            text, so a single escape here is exactly right.
+	  href      NOTE: escaping is not the whole control for a URL. Twig does not
+	            stop `javascript:` - htmlspecialchars() touches no character in
+	            it - so the scheme check happens server side, in
+	            SafeUrl::sanitise(), on the way into the DTO. A rejected URL
+	            arrives here as '', which is why the link degrades to a <span>
+	            below rather than rendering an empty href.
+	  title     ResultEnricher passes StringUtil::stripInsertTags() only.
+	  pageTeaser  tl_page.page_teaser is a plain textarea with
+	              decodeEntities=>true and no rte/allowHtml (zyppy-page
+	              tl_page.php:114-122). It is text, not editor HTML.
+	  class, relevance, and every image attribute.
+
+	IMAGES. `image` is built by contao.image.studio and carries src, srcset,
+	sizes, width, height and alt - which is what finally makes tl_module.imgSize
+	do something. `pageImage` is still set, to the same URL, so a site-specific
+	search_* template written against the old bare-path shape keeps working.
+	--------------------------------------------------------------------------
+#}
+<div class="{{ class|default('') }}">
+
+	<h3>
+		{%- if href|default('') -%}
+			<a href="{{ href }}" title="{{ title|default('') }}">{{ link|default('') }}</a>
+		{%- else -%}
+			<span title="{{ title|default('') }}">{{ link|default('') }}</span>
+		{%- endif %} <span class="relevance">[{{ relevance|default('') }}]</span>
+	</h3>
+
+	{% if image|default(null) and image.src|default('') %}
+		<img src="{{ image.src }}" alt="{{ image.alt|default('') }}" class="page_image"
+			{%- if image.srcset|default('') %} srcset="{{ image.srcset }}"{% endif %}
+			{%- if image.sizes|default('') %} sizes="{{ image.sizes }}"{% endif %}
+			{%- if image.width|default(null) %} width="{{ image.width }}"{% endif %}
+			{%- if image.height|default(null) %} height="{{ image.height }}"{% endif %}>
+	{% elseif pageImage|default('') %}
+		<img src="{{ pageImage }}" alt="" class="page_image">
+	{% endif %}
+
+	{% if pageTeaser|default('') %}
+		<p class="page_teaser">{{ pageTeaser }}</p>
+	{% endif %}
+
+	{% if hasContext|default(false) %}
+		<p class="context">{{ context|default('')|raw }}</p>
+	{% endif %}
+
+</div>

@@ -1,0 +1,26 @@
+# The live search endpoint.
+#
+# Declared in YAML rather than as a #[Route] attribute on purpose: attribute
+# route loading needs a loader type whose NAME changed across the supported
+# range ('annotation' on the older line, 'attribute' from Symfony 6.4), and this
+# bundle has no upper Contao bound. A YAML file is loaded by the same
+# YamlFileLoader on every version.
+#
+# Loaded by Zyppy\Search\ContaoManager\Plugin::getRouteCollection().
+#
+# _scope: frontend is what makes Contao treat this as a front end request, which
+# in turn is what makes Controller::isVisibleElement() apply the member group
+# check inside SearchController rather than short-circuiting to "visible".
+#
+# _token_check: false is explicit rather than incidental. This is a read only
+# GET, so there is no CSRF consideration to satisfy - the audit established
+# that when the endpoint was still a page render.
+zyppy_search_query:
+    path: /_zyppy/search/{moduleId}
+    controller: Zyppy\Search\Controller\SearchController
+    methods: [GET]
+    requirements:
+        moduleId: '\d+'
+    defaults:
+        _scope: frontend
+        _token_check: false
